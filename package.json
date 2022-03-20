@@ -1,8 +1,8 @@
 {
   "name": "gdb-ts",
   "version": "1.3.0",
-  "author": "Alexander Baygeldin <a.baygeldin@gmail.com>",
-  "description": "JavaScript interface for GDB.",
+  "author": "Rowan Hart <rowanbhart@gmail.com>",
+  "description": "JavaScript interface for GDB. Forked from archived taskcluster/gdb-js.",
   "license": "MPL-2.0",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -32,12 +32,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/taskcluster/gdb-ts.git"
+    "url": "git+https://github.com/novafacing/gdb-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/taskcluster/gdb-ts/issues"
+    "url": "https://github.com/novafacing/gdb-ts/issues"
   },
-  "homepage": "https://github.com/taskcluster/gdb-ts#readme",
+  "homepage": "https://github.com/novafacing/gdb-ts#readme",
   "devDependencies": {
     "babel-core": "^6.8.0",
     "babel-eslint": "^6.0.4",
