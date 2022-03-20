@@ -1,5 +1,5 @@
 {
-  "name": "gdb-js",
+  "name": "gdb-ts",
   "version": "1.3.0",
   "author": "Alexander Baygeldin <a.baygeldin@gmail.com>",
   "description": "JavaScript interface for GDB.",
@@ -11,10 +11,10 @@
     "posttest": "npm run docker-rm",
     "prepublish": "npm run release && npm test && npm run lint",
     "postpublish": "npm run clean",
-    "docker-run": "docker run -i -d --cap-add sys_ptrace --name gdb-js baygeldin/gdb-examples:v1.2",
-    "docker-rm": "docker rm -f gdb-js",
+    "docker-run": "docker run -i -d --cap-add sys_ptrace --name gdb-ts baygeldin/gdb-examples:v1.2",
+    "docker-rm": "docker rm -f gdb-ts",
     "docker-pull": "docker pull baygeldin/gdb-examples:v1.2",
-    "debug": "DEBUG=gdb-js:* mocha",
+    "debug": "DEBUG=gdb-ts:* mocha",
     "docs": "jsdoc -c jsdoc.json",
     "build": "webpack",
     "watch": "npm run build -- --watch",
@@ -31,12 +31,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/taskcluster/gdb-js.git"
+    "url": "git+https://github.com/taskcluster/gdb-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/taskcluster/gdb-js/issues"
+    "url": "https://github.com/taskcluster/gdb-ts/issues"
   },
-  "homepage": "https://github.com/taskcluster/gdb-js#readme",
+  "homepage": "https://github.com/taskcluster/gdb-ts#readme",
   "devDependencies": {
     "babel-core": "^6.8.0",
     "babel-eslint": "^6.0.4",
@@ -59,6 +59,7 @@
     "snazzy": "^4.0.0",
     "source-map-support": "^0.4.0",
     "standard": "^7.1.0",
+    "typescript": "^4.6.2",
     "webpack": "^1.13.1"
   },
   "standard": {
