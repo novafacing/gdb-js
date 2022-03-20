@@ -1,45 +1,45 @@
-import createDebugger from "debug";
-import { EventEmitter } from "events";
-import _ from "highland";
+import createDebugger from 'debug'
+import { EventEmitter } from 'events'
+import _ from 'highland'
 
 // Custom error class.
-import GDBError from "./error.js";
+import GDBError from './error.js'
 // Thread object class.
-import Thread from "./thread.js";
+import Thread from './thread.js'
 // Thread group object class.
-import ThreadGroup from "./group.js";
+import ThreadGroup from './group.js'
 // Breakpoint object class.
-import Breakpoint from "./breakpoint.js";
+import Breakpoint from './breakpoint.js'
 // Frame object class.
-import Frame from "./frame.js";
+import Frame from './frame.js'
 // Variable object class.
-import Variable from "./variable.js";
+import Variable from './variable.js'
 // Parser for the GDB/MI output syntax.
-import { parse as parseMI } from "./parsers/gdbmi.pegjs";
+import { parse as parseMI } from './parsers/gdbmi.pegjs'
 // Base class for custom GDB commands.
-import baseCommand from "./scripts/base.py";
+import baseCommand from './scripts/base.py'
 // Command that executes CLI commands and returns them as a string.
-import execCommand from "./scripts/exec.py";
+import execCommand from './scripts/exec.py'
 // Command that lists all symbols (e.g. locals, globals) in the current context.
-import contextCommand from "./scripts/context.py";
+import contextCommand from './scripts/context.py'
 // Command that searches source files using regex.
-import sourcesCommand from "./scripts/sources.py";
+import sourcesCommand from './scripts/sources.py'
 // Command that returns the current thread group.
-import groupCommand from "./scripts/group.py";
+import groupCommand from './scripts/group.py'
 // Command that returns the current thread.
-import threadCommand from "./scripts/thread.py";
+import threadCommand from './scripts/thread.py'
 // Base handler for custom GDB events.
-import baseEvent from "./scripts/event.py";
+import baseEvent from './scripts/event.py'
 // Event that emits when new objfile is added.
-import objfileEvent from "./scripts/objfile.py";
+import objfileEvent from './scripts/objfile.py'
 
 // Debug logging.
-let debugOutput = createDebugger("gdb-ts:output");
-let debugCLIInput = createDebugger("gdb-ts:input:cli");
-let debugMIInput = createDebugger("gdb-ts:input:mi");
-let debugCLIResluts = createDebugger("gdb-ts:results:cli");
-let debugMIResluts = createDebugger("gdb-ts:results:mi");
-let debugEvents = createDebugger("gdb-ts:events");
+let debugOutput = createDebugger('gdb-ts:output')
+let debugCLIInput = createDebugger('gdb-ts:input:cli')
+let debugMIInput = createDebugger('gdb-ts:input:mi')
+let debugCLIResluts = createDebugger('gdb-ts:results:cli')
+let debugMIResluts = createDebugger('gdb-ts:results:mi')
+let debugEvents = createDebugger('gdb-ts:events')
 
 /**
  * Converts string to integer.
@@ -49,8 +49,8 @@ let debugEvents = createDebugger("gdb-ts:events");
  *
  * @ignore
  */
-function toInt(str) {
-  return parseInt(str, 10);
+function toInt (str) {
+  return parseInt(str, 10)
 }
 
 /**
@@ -61,13 +61,13 @@ function toInt(str) {
  *
  * @ignore
  */
-function escape(script) {
+function escape (script) {
   return script
-    .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t")
-    .replace(/"/g, '\\"');
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+    .replace(/"/g, '\\"')
 }
 
 /**
@@ -75,7 +75,7 @@ function escape(script) {
  *
  * @name Task
  * @function
- * @returns {Promise<any, GDBError>|any} Whatever.
+ * @returns {Promise<any>|any} Whatever.
  *
  * @ignore
  */
@@ -95,28 +95,28 @@ class GDB extends EventEmitter {
    *   If you're using GDB all-stop mode, then it should also have implementation of
    *   `kill` method that is able to send signals (such as `SIGINT`).
    */
-  constructor(childProcess) {
-    super();
+  constructor (childProcess) {
+    super()
 
-    this._process = childProcess;
+    this._process = childProcess
     /**
      * The main queue of commands sent to GDB.
      *
      * @ignore
      */
-    this._queue = _();
+    this._queue = _()
     /**
      * The mutex to make simultaneous execution of public methods impossible.
      *
      * @ignore
      */
-    this._lock = Promise.resolve();
+    this._lock = Promise.resolve()
 
     let stream = _(this._process.stdout)
       .map((chunk) => chunk.toString())
       .splitBy(/\r\n|\n/)
       .tap(debugOutput)
-      .map(parseMI);
+      .map(parseMI)
 
     // Basically, we're just branching our stream to the messages that should
     // be emitted and the results which we then zip with the sent commands.
@@ -124,33 +124,33 @@ class GDB extends EventEmitter {
 
     let results = stream
       .observe()
-      .filter((msg) => msg.type === "result")
+      .filter((msg) => msg.type === 'result')
       .zip(this._queue)
-      .map((msg) => Object.assign({}, msg[0], msg[1]));
+      .map((msg) => Object.assign({}, msg[0], msg[1]))
 
     results
       .fork()
-      .filter((msg) => msg.state === "error")
+      .filter((msg) => msg.state === 'error')
       .each((msg) => {
-        let { data, cmd, reject } = msg;
-        let text = `Error while executing "${cmd}". ${data.msg}`;
-        let err = new GDBError(cmd, text, toInt(data.code));
-        reject(err);
-      });
+        let { data, cmd, reject } = msg
+        let text = `Error while executing "${cmd}". ${data.msg}`
+        let err = new GDBError(cmd, text, toInt(data.code))
+        reject(err)
+      })
 
-    let success = results.fork().filter((msg) => msg.state !== "error");
+    let success = results.fork().filter((msg) => msg.state !== 'error')
 
     success
       .fork()
-      .filter((msg) => msg.interpreter === "mi")
+      .filter((msg) => msg.interpreter === 'mi')
       .tap((msg) => debugMIResluts(msg.data))
       .each((msg) => {
-        msg.resolve(msg.data);
-      });
+        msg.resolve(msg.data)
+      })
 
     let commands = stream
       .observe()
-      .filter((msg) => msg.type === "console")
+      .filter((msg) => msg.type === 'console')
       // It's not possible for a command message to be split into multiple
       // console records, so we can safely just regex every record.
       .map((msg) =>
@@ -158,15 +158,15 @@ class GDB extends EventEmitter {
       )
       .compact()
       .map((msg) => JSON.parse(msg[1]))
-      .tap(debugCLIResluts);
+      .tap(debugCLIResluts)
 
     success
       .observe()
-      .filter((msg) => msg.interpreter === "cli")
+      .filter((msg) => msg.interpreter === 'cli')
       .zip(commands)
       .each((msg) => {
-        msg[0].resolve(msg[1]);
-      });
+        msg[0].resolve(msg[1])
+      })
 
     // Emitting raw async records.
 
@@ -203,33 +203,33 @@ class GDB extends EventEmitter {
      */
     stream
       .fork()
-      .filter((msg) => ["exec", "notify", "status"].includes(msg.type))
+      .filter((msg) => ['exec', 'notify', 'status'].includes(msg.type))
       .each((msg) => {
-        this.emit(msg.type, { state: msg.state, data: msg.data });
-      });
+        this.emit(msg.type, { state: msg.state, data: msg.data })
+      })
 
     // Exposing streams of raw stream records.
 
     /**
      * Raw output of GDB/MI console records.
      *
-     * @type {Readable<string>}
+     * @type {Readable}
      */
     this.consoleStream = stream
       .observe()
-      .filter((msg) => msg.type === "console")
-      .map((msg) => msg.data.replace(/<gdbjs:.*?:gdbjs>/g, ""));
+      .filter((msg) => msg.type === 'console')
+      .map((msg) => msg.data.replace(/<gdbjs:.*?:gdbjs>/g, ''))
 
     /**
      * Raw output of GDB/MI log records.
      * The log stream contains debugging messages being produced by gdb's internals.
      *
-     * @type {Readable<string>}
+     * @type {Readable}
      */
     this.logStream = stream
       .observe()
-      .filter((msg) => msg.type === "log")
-      .map((msg) => msg.data);
+      .filter((msg) => msg.type === 'log')
+      .map((msg) => msg.data)
 
     /**
      * Raw output of GDB/MI target records.
@@ -238,12 +238,12 @@ class GDB extends EventEmitter {
      * to distinguish the target and the MI output correctly due to a bug in GDB/MI. Thus,
      * it's recommended to use `--tty` option with your GDB process.
      *
-     * @type {Readable<string>}
+     * @type {Readable}
      */
     this.targetStream = stream
       .observe()
-      .filter((msg) => msg.type === "target")
-      .map((msg) => msg.data);
+      .filter((msg) => msg.type === 'target')
+      .map((msg) => msg.data)
 
     // Emitting defined events.
 
@@ -262,27 +262,27 @@ class GDB extends EventEmitter {
      */
     stream
       .fork()
-      .filter((msg) => msg.type === "exec" && msg.state === "stopped")
+      .filter((msg) => msg.type === 'exec' && msg.state === 'stopped')
       .each((msg) => {
-        let { data } = msg;
-        let thread = data["thread-id"];
-        let event = { reason: data.reason };
+        let { data } = msg
+        let thread = data['thread-id']
+        let event = { reason: data.reason }
         if (thread) {
           event.thread = new Thread(toInt(thread), {
             frame: new Frame({
               file: data.frame.fullname,
               line: toInt(data.frame.line),
-              func: data.frame.func,
+              func: data.frame.func
             }),
-            status: "stopped",
-          });
+            status: 'stopped'
+          })
         }
-        if (data.reason === "breakpoint-hit") {
-          event.breakpoint = new Breakpoint(toInt(data.bkptno));
+        if (data.reason === 'breakpoint-hit') {
+          event.breakpoint = new Breakpoint(toInt(data.bkptno))
         }
 
-        this.emit("stopped", event);
-      });
+        this.emit('stopped', event)
+      })
 
     /**
      * This event is emitted when target changes state to running.
@@ -294,17 +294,17 @@ class GDB extends EventEmitter {
      */
     stream
       .fork()
-      .filter((msg) => msg.type === "exec" && msg.state === "running")
+      .filter((msg) => msg.type === 'exec' && msg.state === 'running')
       .each((msg) => {
-        let { data } = msg;
-        let thread = data["thread-id"];
-        let event = {};
-        if (thread !== "all") {
-          event.thread = new Thread(toInt(thread), { status: "running" });
+        let { data } = msg
+        let thread = data['thread-id']
+        let event = {}
+        if (thread !== 'all') {
+          event.thread = new Thread(toInt(thread), { status: 'running' })
         }
 
-        this.emit("running", event);
-      });
+        this.emit('running', event)
+      })
 
     /**
      * This event is emitted when new thread spawns.
@@ -323,20 +323,20 @@ class GDB extends EventEmitter {
       .fork()
       .filter(
         (msg) =>
-          msg.type === "notify" &&
-          ["thread-created", "thread-exited"].includes(msg.state)
+          msg.type === 'notify' &&
+          ['thread-created', 'thread-exited'].includes(msg.state)
       )
       .each((msg) => {
-        let { state, data } = msg;
+        let { state, data } = msg
 
         this.emit(
           state,
           new Thread(toInt(data.id), {
             // GDB/MI stores group id as `i<id>` string.
-            group: new ThreadGroup(toInt(data["group-id"].slice(1))),
+            group: new ThreadGroup(toInt(data['group-id'].slice(1)))
           })
-        );
-      });
+        )
+      })
 
     /**
      * This event is emitted when thread group starts.
@@ -355,19 +355,19 @@ class GDB extends EventEmitter {
       .fork()
       .filter(
         (msg) =>
-          msg.type === "notify" &&
-          ["thread-group-started", "thread-group-exited"].includes(msg.state)
+          msg.type === 'notify' &&
+          ['thread-group-started', 'thread-group-exited'].includes(msg.state)
       )
       .each((msg) => {
-        let { state, data } = msg;
+        let { state, data } = msg
 
         this.emit(
           state,
           new ThreadGroup(toInt(data.id.slice(1)), {
-            pid: data.pid ? toInt(data.pid) : null,
+            pid: data.pid ? toInt(data.pid) : null
           })
-        );
-      });
+        )
+      })
 
     /**
      * This event is emitted with the full path to executable
@@ -378,15 +378,15 @@ class GDB extends EventEmitter {
      */
     stream
       .fork()
-      .filter((msg) => msg.type === "console")
+      .filter((msg) => msg.type === 'console')
       .flatMap((msg) => msg.data.match(/<gdbjs:event:.*?:event:gdbjs>/g) || [])
       .map((msg) =>
         /<gdbjs:event:([a-z-]+) (.*?) [a-z-]+:event:gdbjs>/g.exec(msg)
       )
       .tap((msg) => debugEvents(msg[1], msg[2]))
       .each((msg) => {
-        this.emit(msg[1], msg[2]);
-      });
+        this.emit(msg[1], msg[2])
+      })
   }
 
   // Public methods.
@@ -399,8 +399,8 @@ class GDB extends EventEmitter {
    * @type {object}
    * @readonly
    */
-  get process() {
-    return this._process;
+  get process () {
+    return this._process
   }
 
   /**
@@ -409,10 +409,10 @@ class GDB extends EventEmitter {
    * (e.g. {@link GDB#context|context}, {@link GDB#execCLI|execCLI}).
    * It also enables custom actions (like {@link GDB#new-objfile|`new-objfile` event}).
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  init() {
+  init () {
     return this._sync(async () => {
       let scripts = [
         baseCommand,
@@ -422,13 +422,13 @@ class GDB extends EventEmitter {
         sourcesCommand,
         groupCommand,
         threadCommand,
-        objfileEvent,
-      ];
+        objfileEvent
+      ]
 
       for (let s of scripts) {
-        await this._execMI(`-interpreter-exec console "python\\n${escape(s)}"`);
+        await this._execMI(`-interpreter-exec console "python\\n${escape(s)}"`)
       }
-    });
+    })
   }
 
   /**
@@ -437,11 +437,11 @@ class GDB extends EventEmitter {
    * @param {string} param The name of a GDB variable.
    * @param {string} value The value of a GDB variable.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  set(param, value) {
-    return this._sync(() => this._set(param, value));
+  set (param, value) {
+    return this._sync(() => this._set(param, value))
   }
 
   /**
@@ -450,30 +450,30 @@ class GDB extends EventEmitter {
    * sense only for systems that support `fork` and `vfork` calls.
    * It won't work for Windows, for example.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  attachOnFork() {
-    return this._sync(() => this._set("detach-on-fork", "off"));
+  attachOnFork () {
+    return this._sync(() => this._set('detach-on-fork', 'off'))
   }
 
   /**
    * Enable async and non-stop modes in GDB. This mode is *highly* recommended!
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  enableAsync() {
+  enableAsync () {
     return this._sync(async () => {
       try {
-        await this._set("mi-async", "on");
+        await this._set('mi-async', 'on')
       } catch (e) {
         // For gdb <= 7.7 (which not support `mi-async`).
-        await this._set("target-async", "on");
+        await this._set('target-async', 'on')
       }
-      await this._set("non-stop", "on");
-      this._async = true;
-    });
+      await this._set('non-stop', 'on')
+      this._async = true
+    })
   }
 
   /**
@@ -481,17 +481,17 @@ class GDB extends EventEmitter {
    *
    * @param {number} pid The process id or to attach.
    *
-   * @returns {Promise<ThreadGroup, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<ThreadGroup>} A promise that resolves/rejects
    *   with the added thread group.
    */
-  attach(pid) {
+  attach (pid) {
     return this._sync(() => async () => {
-      let res = await this._execCMD("exec add-inferior");
-      let id = toInt(/Added inferior (\d+)/.exec(res)[1]);
-      let group = new ThreadGroup(id);
-      await this._execMI("-target-attach " + pid, group);
-      return group;
-    });
+      let res = await this._execCMD('exec add-inferior')
+      let id = toInt(/Added inferior (\d+)/.exec(res)[1])
+      let group = new ThreadGroup(id)
+      await this._execMI('-target-attach ' + pid, group)
+      return group
+    })
   }
 
   /**
@@ -499,16 +499,16 @@ class GDB extends EventEmitter {
    *
    * @param {ThreadGroup|number} process The process id or the thread group to detach.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  detach(process) {
+  detach (process) {
     return this._sync(() =>
       this._execMI(
-        "-target-detach " +
-          (process instanceof ThreadGroup ? "i" + process.id : process)
+        '-target-detach ' +
+          (process instanceof ThreadGroup ? 'i' + process.id : process)
       )
-    );
+    )
   }
 
   /**
@@ -519,20 +519,20 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread-group to interrupt.
    *   If this parameter is omitted, it will interrupt all threads.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  interrupt(scope) {
+  interrupt (scope) {
     return this._sync(() => {
       if (!this._async) {
-        this._process.kill("SIGINT");
+        this._process.kill('SIGINT')
       } else {
         return this._execMI(
-          scope ? "-exec-interrupt" : "-exec-interrupt --all",
+          scope ? '-exec-interrupt' : '-exec-interrupt --all',
           scope
-        );
+        )
       }
-    });
+    })
   }
 
   /**
@@ -543,47 +543,47 @@ class GDB extends EventEmitter {
    *   or it's outdated). If this parameter is absent, then information about all
    *   threads is returned.
    *
-   * @returns {Promise<Thread[]|Thread, GDBError>} A promise that resolves with an array
+   * @returns {Promise<Thread[]|Thread>} A promise that resolves with an array
    *   of threads or a single thread.
    */
-  threads(scope) {
+  threads (scope) {
     return this._sync(async () => {
       let mapToThread = (t) => {
-        let options = { status: t.state };
+        let options = { status: t.state }
         if (t.frame) {
           options.frame = new Frame({
             file: t.frame.fullname,
             line: toInt(t.frame.line),
             level: toInt(t.frame.level),
-            func: t.frame.func,
-          });
+            func: t.frame.func
+          })
         }
 
-        return new Thread(toInt(t.id), options);
-      };
+        return new Thread(toInt(t.id), options)
+      }
 
       if (scope instanceof Thread) {
-        let { threads } = await this._execMI("-thread-info " + scope.id);
-        return mapToThread(threads[0]);
+        let { threads } = await this._execMI('-thread-info ' + scope.id)
+        return mapToThread(threads[0])
       } else if (scope instanceof ThreadGroup) {
         let { threads } = await this._execMI(
           `-list-thread-groups i${scope.id}`
-        );
-        return threads.map(mapToThread);
+        )
+        return threads.map(mapToThread)
       } else {
-        let { threads } = await this._execMI("-thread-info");
-        return threads.map(mapToThread);
+        let { threads } = await this._execMI('-thread-info')
+        return threads.map(mapToThread)
       }
-    });
+    })
   }
 
   /**
    * Get the current thread.
    *
-   * @returns {Promise<Thread, GDBError>} A promise that resolves with a thread.
+   * @returns {Promise<Thread>} A promise that resolves with a thread.
    */
-  currentThread() {
-    return this._sync(() => this._currentThread());
+  currentThread () {
+    return this._sync(() => this._currentThread())
   }
 
   /**
@@ -592,30 +592,30 @@ class GDB extends EventEmitter {
    *
    * @param {Thread} thread The thread that should be selected.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  selectThread(thread) {
-    return this._sync(() => this._selectThread(thread));
+  selectThread (thread) {
+    return this._sync(() => this._selectThread(thread))
   }
 
   /**
    * Get thread groups.
    *
-   * @returns {Promise<ThreadGroup[], GDBError>} A promise that resolves with
+   * @returns {Promise<ThreadGroup[]>} A promise that resolves with
    *   an array thread groups.
    */
-  threadGroups() {
-    return this._sync(() => this._threadGroups());
+  threadGroups () {
+    return this._sync(() => this._threadGroups())
   }
 
   /**
    * Get the current thread group.
    *
-   * @returns {Promise<ThreadGroup, GDBError>} A promise that resolves with the thread group.
+   * @returns {Promise<ThreadGroup>} A promise that resolves with the thread group.
    */
-  currentThreadGroup() {
-    return this._sync(() => this._currentThreadGroup());
+  currentThreadGroup () {
+    return this._sync(() => this._currentThreadGroup())
   }
 
   /**
@@ -624,11 +624,11 @@ class GDB extends EventEmitter {
    *
    * @param {ThreadGroup} group The thread group that should be selected.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  selectThreadGroup(group) {
-    return this._sync(() => this._selectThreadGroup(group));
+  selectThreadGroup (group) {
+    return this._sync(() => this._selectThreadGroup(group))
   }
 
   /**
@@ -639,28 +639,28 @@ class GDB extends EventEmitter {
    * @param {Thread} [thread] The thread where breakpoint should be set.
    *   If this field is absent, breakpoint applies to all threads.
    *
-   * @returns {Promise<Breakpoint, GDBError>} A promise that resolves with a breakpoint.
+   * @returns {Promise<Breakpoint>} A promise that resolves with a breakpoint.
    */
-  addBreak(file, pos, thread) {
+  addBreak (file, pos, thread) {
     return this._sync(async () => {
-      let opt = thread ? "-p " + thread.id : "";
-      let { bkpt } = await this._execMI(`-break-insert ${opt} ${file}:${pos}`);
+      let opt = thread ? '-p ' + thread.id : ''
+      let { bkpt } = await this._execMI(`-break-insert ${opt} ${file}:${pos}`)
       if (Array.isArray(bkpt)) {
         return new Breakpoint(toInt(bkpt[0].number), {
           file: bkpt[1].fullname,
           line: bkpt[1].line,
           func: bkpt.map((b) => b.func).filter((f) => !!f),
-          thread,
-        });
+          thread
+        })
       } else {
         return new Breakpoint(toInt(bkpt.number), {
           file: bkpt.fullname,
           line: toInt(bkpt.line),
           func: bkpt.func,
-          thread,
-        });
+          thread
+        })
       }
-    });
+    })
   }
 
   /**
@@ -668,11 +668,11 @@ class GDB extends EventEmitter {
    *
    * @param {Breakpoint} [bp] The breakpoint.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  removeBreak(bp) {
-    return this._sync(() => this._execMI("-break-delete " + bp.id));
+  removeBreak (bp) {
+    return this._sync(() => this._execMI('-break-delete ' + bp.id))
   }
 
   /**
@@ -681,11 +681,11 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the stepping should be done.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  stepIn(scope) {
-    return this._sync(() => this._execMI("-exec-step", scope));
+  stepIn (scope) {
+    return this._sync(() => this._execMI('-exec-step', scope))
   }
 
   /**
@@ -694,11 +694,11 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the stepping should be done.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  reverseStepIn(scope) {
-    return this._sync(() => this._execMI("-exec-step --reverse", scope));
+  reverseStepIn (scope) {
+    return this._sync(() => this._execMI('-exec-step --reverse', scope))
   }
 
   /**
@@ -707,11 +707,11 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the stepping should be done.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  stepOut(scope) {
-    return this._sync(() => this._execMI("-exec-finish", scope));
+  stepOut (scope) {
+    return this._sync(() => this._execMI('-exec-finish', scope))
   }
 
   /**
@@ -720,11 +720,11 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the stepping should be done.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  next(scope) {
-    return this._sync(() => this._execMI("-exec-next", scope));
+  next (scope) {
+    return this._sync(() => this._execMI('-exec-next', scope))
   }
 
   /**
@@ -733,11 +733,11 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the stepping should be done.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  reverseNext(scope) {
-    return this._sync(() => this._execMI("-exec-next --reverse", scope));
+  reverseNext (scope) {
+    return this._sync(() => this._execMI('-exec-next --reverse', scope))
   }
 
   /**
@@ -746,18 +746,18 @@ class GDB extends EventEmitter {
    * @param {ThreadGroup} [group] The thread group to run.
    *   If this parameter is omitted, current thread group will be run.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  run(group) {
+  run (group) {
     // XXX: seems like MI command `-exec-run` has a bug that makes it
     // run in the foreground mode (although the opposite is stated in the docs).
     // This can cause blocking even in `target-async` mode.
     return this._sync(() =>
       this._async
-        ? this._execCMD("exec run&", group)
-        : this._execMI("-exec-run", group)
-    );
+        ? this._execCMD('exec run&', group)
+        : this._execMI('-exec-run', group)
+    )
   }
 
   /**
@@ -766,13 +766,13 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group that should be continued.
    *   If this parameter is omitted, all threads are continued.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  proceed(scope) {
+  proceed (scope) {
     return this._sync(() =>
-      this._execMI(scope ? "-exec-continue" : "-exec-continue --all", scope)
-    );
+      this._execMI(scope ? '-exec-continue' : '-exec-continue --all', scope)
+    )
   }
 
   /**
@@ -781,16 +781,16 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group that should be continued.
    *   If this parameter is omitted, all threads are continued.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  reverseProceed(scope) {
+  reverseProceed (scope) {
     return this._sync(() =>
       this._execMI(
-        scope ? "-exec-continue --reverse" : "-exec-continue --all --reverse",
+        scope ? '-exec-continue --reverse' : '-exec-continue --all --reverse',
         scope
       )
-    );
+    )
   }
 
   /**
@@ -799,14 +799,14 @@ class GDB extends EventEmitter {
    *
    * @param {Thread} [thread] The thread from which the context should be taken.
    *
-   * @returns {Promise<Variable[], GDBError>} A promise that resolves with
+   * @returns {Promise<Variable[]>} A promise that resolves with
    *   an array of variables.
    */
-  context(thread) {
+  context (thread) {
     return this._sync(async () => {
-      let res = await this._execCMD("context", thread);
-      return res.map((v) => new Variable(v));
-    });
+      let res = await this._execCMD('context', thread)
+      return res.map((v) => new Variable(v))
+    })
   }
 
   /**
@@ -814,21 +814,21 @@ class GDB extends EventEmitter {
    *
    * @param {Thread} [thread] The thread from which the callstack should be taken.
    *
-   * @returns {Promise<Frame[], GDBError>} A promise that resolves with an array of frames.
+   * @returns {Promise<Frame[]>} A promise that resolves with an array of frames.
    */
-  callstack(thread) {
+  callstack (thread) {
     return this._sync(async () => {
-      let { stack } = await this._execMI("-stack-list-frames", thread);
+      let { stack } = await this._execMI('-stack-list-frames', thread)
       return stack.map(
         (f) =>
           new Frame({
             file: f.value.fullname,
             line: toInt(f.value.line),
             level: toInt(f.value.level),
-            func: f.value.func,
+            func: f.value.func
           })
-      );
-    });
+      )
+    })
   }
 
   /**
@@ -847,28 +847,28 @@ class GDB extends EventEmitter {
    *   This option is useful when the project has a lot of files so that
    *   it's not desirable to send them all in one chunk along the wire.
    *
-   * @returns {Promise<string[], GDBError>} A promise that resolves with
+   * @returns {Promise<string[]>} A promise that resolves with
    *   an array of source files.
    */
-  sourceFiles(options = {}) {
+  sourceFiles (options = {}) {
     return this._sync(async () => {
-      let files = [];
-      let group = options.group;
-      let pattern = options.pattern || "";
-      let cmd = "sources " + pattern;
+      let files = []
+      let group = options.group
+      let pattern = options.pattern || ''
+      let cmd = 'sources ' + pattern
 
       if (group) {
-        files = await this._execCMD(cmd, group);
+        files = await this._execCMD(cmd, group)
       } else {
-        let groups = await this._threadGroups();
+        let groups = await this._threadGroups()
         for (let g of groups) {
-          files = files.concat(await this._execCMD(cmd, g));
+          files = files.concat(await this._execCMD(cmd, g))
         }
-        files = files.filter((f, index) => files.indexOf(f) === index);
+        files = files.filter((f, index) => files.indexOf(f) === index)
       }
 
-      return files;
-    });
+      return files
+    })
   }
 
   /**
@@ -878,23 +878,23 @@ class GDB extends EventEmitter {
    * @param {Thread|ThreadGroup} [scope] The thread or thread group where
    *   the expression should be evaluated.
    *
-   * @returns {Promise<string, GDBError>} A promise that resolves with the result of expression.
+   * @returns {Promise<string>} A promise that resolves with the result of expression.
    */
-  evaluate(expr, scope) {
+  evaluate (expr, scope) {
     return this._sync(async () => {
-      let res = await this._execMI("-data-evaluate-expression " + expr, scope);
-      return res.value;
-    });
+      let res = await this._execMI('-data-evaluate-expression ' + expr, scope)
+      return res.value
+    })
   }
 
   /**
    * Exit GDB.
    *
-   * @returns {Promise<undefined, GDBError>} A promise that resolves/rejects
+   * @returns {Promise<undefined>} A promise that resolves/rejects
    *   after completion of a GDB command.
    */
-  exit() {
-    return this._sync(() => this._execMI("-gdb-exit"));
+  exit () {
+    return this._sync(() => this._execMI('-gdb-exit'))
   }
 
   /**
@@ -930,13 +930,13 @@ class GDB extends EventEmitter {
    * @param {string} src The python script.
    * @param {Thread} [thread] The thread where the script should be executed.
    *
-   * @returns {Promise<string, GDBError>} A promise that resolves with the output of
+   * @returns {Promise<string>} A promise that resolves with the output of
    *   python script execution.
    */
-  execPy(src, scope) {
+  execPy (src, scope) {
     return this._sync(() =>
       this._execCMD(`exec python\\n${escape(src)}`, scope)
-    );
+    )
   }
 
   /**
@@ -945,11 +945,11 @@ class GDB extends EventEmitter {
    * @param {string} cmd The CLI command.
    * @param {Thread|ThreadGroup} [scope] The thread where the command should be executed.
    *
-   * @returns {Promise<string, GDBError>} A promise that resolves with
+   * @returns {Promise<string>} A promise that resolves with
    *   the result of command execution.
    */
-  execCLI(cmd, scope) {
-    return this._sync(() => this._execCMD(`exec ${cmd}`, scope));
+  execCLI (cmd, scope) {
+    return this._sync(() => this._execCMD(`exec ${cmd}`, scope))
   }
 
   /**
@@ -961,11 +961,11 @@ class GDB extends EventEmitter {
    *   the command should be executed. If this parameter is omitted,
    *   it executes in the current thread.
    *
-   * @returns {Promise<object, GDBError>} A promise that resolves with
+   * @returns {Promise<object>} A promise that resolves with
    *   the JSON representation of the result of command execution.
    */
-  execCMD(cmd, scope) {
-    return this._sync(() => this._execCMD(cmd, scope));
+  execCMD (cmd, scope) {
+    return this._sync(() => this._execCMD(cmd, scope))
   }
 
   /**
@@ -976,11 +976,11 @@ class GDB extends EventEmitter {
    *   the command should be executed. If this parameter is omitted,
    *   it executes in the current thread.
    *
-   * @returns {Promise<object, GDBError>} A promise that resolves with
+   * @returns {Promise<object>} A promise that resolves with
    *   the JSON representation of the result of command execution.
    */
-  execMI(cmd, scope) {
-    return this._sync(() => this._execMI(cmd, scope));
+  execMI (cmd, scope) {
+    return this._sync(() => this._execMI(cmd, scope))
   }
 
   // Private methods
@@ -992,8 +992,8 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _set(param, value) {
-    await this._execMI(`-gdb-set ${param} ${value}`);
+  async _set (param, value) {
+    await this._execMI(`-gdb-set ${param} ${value}`)
   }
 
   /**
@@ -1001,9 +1001,9 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _currentThread() {
-    let { id, group } = await this._execCMD("thread");
-    return id ? new Thread(id, { group }) : null;
+  async _currentThread () {
+    let { id, group } = await this._execCMD('thread')
+    return id ? new Thread(id, { group }) : null
   }
 
   /**
@@ -1011,9 +1011,9 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _currentThreadGroup() {
-    let { id, pid } = await this._execCMD("group");
-    return new ThreadGroup(id, { pid });
+  async _currentThreadGroup () {
+    let { id, pid } = await this._execCMD('group')
+    return new ThreadGroup(id, { pid })
   }
 
   /**
@@ -1021,8 +1021,8 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _selectThread(thread) {
-    await this._execMI("-thread-select " + thread.id);
+  async _selectThread (thread) {
+    await this._execMI('-thread-select ' + thread.id)
   }
 
   /**
@@ -1030,8 +1030,8 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _selectThreadGroup(group) {
-    await this._execCMD("exec inferior " + group.id);
+  async _selectThreadGroup (group) {
+    await this._execCMD('exec inferior ' + group.id)
   }
 
   /**
@@ -1039,15 +1039,15 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  async _threadGroups() {
-    let { groups } = await this._execMI("-list-thread-groups");
+  async _threadGroups () {
+    let { groups } = await this._execMI('-list-thread-groups')
     return groups.map(
       (g) =>
         new ThreadGroup(toInt(g.id.slice(1)), {
           pid: toInt(g.pid),
-          executable: g.executable,
+          executable: g.executable
         })
-    );
+    )
   }
 
   /**
@@ -1055,15 +1055,15 @@ class GDB extends EventEmitter {
    *
    * @param {Task} [task] The task to execute.
    *
-   * @returns {Promise<any, GDBError>} A promise that resolves with task results.
+   * @returns {Promise<any>} A promise that resolves with task results.
    *
    * @ignore
    */
-  async _preserveThread(task) {
-    let thread = await this._currentThread();
-    let res = await task();
-    if (thread) await this._selectThread(thread);
-    return res;
+  async _preserveThread (task) {
+    let thread = await this._currentThread()
+    let res = await task()
+    if (thread) await this._selectThread(thread)
+    return res
   }
 
   /**
@@ -1071,17 +1071,17 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  _execCMD(cmd, scope) {
+  _execCMD (cmd, scope) {
     if (scope instanceof Thread) {
       return this._preserveThread(() =>
-        this._selectThread(scope).then(() => this._exec(cmd, "cli"))
-      );
+        this._selectThread(scope).then(() => this._exec(cmd, 'cli'))
+      )
     } else if (scope instanceof ThreadGroup) {
       return this._preserveThread(() =>
-        this._selectThreadGroup(scope).then(() => this._exec(cmd, "cli"))
-      );
+        this._selectThreadGroup(scope).then(() => this._exec(cmd, 'cli'))
+      )
     } else {
-      return this._exec(cmd, "cli");
+      return this._exec(cmd, 'cli')
     }
   }
 
@@ -1090,18 +1090,18 @@ class GDB extends EventEmitter {
    *
    * @ignore
    */
-  _execMI(cmd, scope) {
-    let [, name, options] = /([^ ]+)( .*|)/.exec(cmd);
+  _execMI (cmd, scope) {
+    let [, name, options] = /([^ ]+)( .*|)/.exec(cmd)
 
     if (scope instanceof Thread) {
-      return this._exec(`${name} --thread ${scope.id} ${options}`, "mi");
+      return this._exec(`${name} --thread ${scope.id} ${options}`, 'mi')
     } else if (scope instanceof ThreadGroup) {
       // `--thread-group` option changes thread.
       return this._preserveThread(() =>
-        this._exec(`${name} --thread-group i${scope.id} ${options}`, "mi")
-      );
+        this._exec(`${name} --thread-group i${scope.id} ${options}`, 'mi')
+      )
     } else {
-      return this._exec(cmd, "mi");
+      return this._exec(cmd, 'mi')
     }
   }
 
@@ -1112,24 +1112,24 @@ class GDB extends EventEmitter {
    * @param {string} cmd The command (eaither a MI or a defined Python command).
    * @param {string} interpreter The interpreter that should execute the command.
    *
-   * @returns {Promise<object, GDBError>} A promise that resolves with
+   * @returns {Promise<object>} A promise that resolves with
    *   the JSON representation of the result of command execution.
    *
    * @ignore
    */
-  _exec(cmd, interpreter) {
-    if (interpreter === "mi") {
-      debugMIInput(cmd);
+  _exec (cmd, interpreter) {
+    if (interpreter === 'mi') {
+      debugMIInput(cmd)
     } else {
-      debugCLIInput(`gdbjs-${cmd}`);
-      cmd = `-interpreter-exec console "gdbjs-${cmd}"`;
+      debugCLIInput(`gdbjs-${cmd}`)
+      cmd = `-interpreter-exec console "gdbjs-${cmd}"`
     }
 
-    this._process.stdin.write(cmd + "\n", { binary: true });
+    this._process.stdin.write(cmd + '\n', { binary: true })
 
     return new Promise((resolve, reject) => {
-      this._queue.write({ cmd, interpreter, resolve, reject });
-    });
+      this._queue.write({ cmd, interpreter, resolve, reject })
+    })
   }
 
   /**
@@ -1143,13 +1143,13 @@ class GDB extends EventEmitter {
    *
    * @param {Task} task The task to execute.
    *
-   * @returns {Promise<any, GDBError>} A promise that resolves with task results.
+   * @returns {Promise<any>} A promise that resolves with task results.
    *
    * @ignore
    */
-  _sync(task) {
-    this._lock = this._lock.then(task, task);
-    return this._lock;
+  _sync (task) {
+    this._lock = this._lock.then(task, task)
+    return this._lock
   }
 }
 
@@ -1160,5 +1160,5 @@ export {
   Breakpoint,
   Frame,
   Variable,
-  parseMI as _parseMI,
-};
+  parseMI as _parseMI
+}
